@@ -59,12 +59,13 @@ func TestInstallOperator(t *testing.T) {
 		t.Run("install "+operator+" operator is successful", func(t *testing.T) {
 			// given
 			fakeClient := test.NewFakeClient(t, &installPlan)
+			test.FakeSSA(fakeClient)
 			fakeClientWithReadyCatalogSource(fakeClient)
 			term := NewFakeTerminalWithResponse("Y")
 			ctx := clicontext.NewTerminalContext(term)
 
 			// when
-			err := installOperator(ctx, args, operator, commonclient.NewApplyClient(fakeClient))
+			err := installOperator(ctx, args, operator, newApplyClient(fakeClient))
 
 			// then
 			require.NoError(t, err)
@@ -95,11 +96,12 @@ func TestInstallOperator(t *testing.T) {
 		t.Run("install "+operator+" operator fails if CatalogSource is not ready", func(t *testing.T) {
 			// given
 			fakeClient := test.NewFakeClient(t)
+			test.FakeSSA(fakeClient)
 			term := NewFakeTerminalWithResponse("Y")
 			ctx := clicontext.NewTerminalContext(term)
 
 			// when
-			err := installOperator(ctx, args, operator, commonclient.NewApplyClient(fakeClient))
+			err := installOperator(ctx, args, operator, newApplyClient(fakeClient))
 
 			// then
 			require.ErrorContains(t, err, "failed waiting for catalog source to be ready.")
@@ -114,12 +116,13 @@ func TestInstallOperator(t *testing.T) {
 			notReadyIP := installPlan.DeepCopy()
 			notReadyIP.Status = olmv1alpha1.InstallPlanStatus{Phase: olmv1alpha1.InstallPlanFailed}
 			fakeClient := test.NewFakeClient(t, notReadyIP)
+			test.FakeSSA(fakeClient)
 			fakeClientWithReadyCatalogSource(fakeClient)
 			term := NewFakeTerminalWithResponse("Y")
 			ctx := clicontext.NewTerminalContext(term)
 
 			// when
-			err := installOperator(ctx, args, operator, commonclient.NewApplyClient(fakeClient))
+			err := installOperator(ctx, args, operator, newApplyClient(fakeClient))
 
 			// then
 			require.ErrorContains(t, err, "failed waiting for install plan to be complete.")
@@ -133,13 +136,14 @@ func TestInstallOperator(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{Name: operatorAlreadyInstalled, Namespace: namespace},
 			}
 			fakeClient := test.NewFakeClient(t, &existingSubscription)
+			test.FakeSSA(fakeClient)
 			term := NewFakeTerminalWithResponse("Y")
 			ctx := clicontext.NewTerminalContext(term)
 
 			// when
 			err := installOperator(ctx, installArgs{namespace: namespace, waitForReadyTimeout: 1 * time.Second},
 				operator,
-				commonclient.NewApplyClient(fakeClient),
+				newApplyClient(fakeClient),
 			)
 
 			// then
@@ -152,12 +156,13 @@ func TestInstallOperator(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{Name: operatorResourceName(operator), Namespace: namespace},
 			}
 			fakeClient := test.NewFakeClient(t, &existingOperatorGroup, &installPlan)
+			test.FakeSSA(fakeClient)
 			fakeClientWithReadyCatalogSource(fakeClient)
 			term := NewFakeTerminalWithResponse("y")
 			ctx := clicontext.NewTerminalContext(term)
 
 			// when
-			err := installOperator(ctx, args, operator, commonclient.NewApplyClient(fakeClient))
+			err := installOperator(ctx, args, operator, newApplyClient(fakeClient))
 
 			// then
 			require.NoError(t, err)
@@ -169,6 +174,7 @@ func TestInstallOperator(t *testing.T) {
 		t.Run("namespace is computed if not provided", func(t *testing.T) {
 			// given
 			fakeClient := test.NewFakeClient(t, &installPlan)
+			test.FakeSSA(fakeClient)
 			fakeClientWithReadyCatalogSource(fakeClient)
 			term := NewFakeTerminalWithResponse("y")
 			ctx := clicontext.NewTerminalContext(term)
@@ -176,7 +182,7 @@ func TestInstallOperator(t *testing.T) {
 			// when
 			err := installOperator(ctx, installArgs{namespace: "", kubeConfig: kubeconfig, waitForReadyTimeout: timeout}, // we provide no namespace
 				operator,
-				commonclient.NewApplyClient(fakeClient),
+				newApplyClient(fakeClient),
 			)
 			// then
 			require.NoError(t, err)
@@ -187,6 +193,7 @@ func TestInstallOperator(t *testing.T) {
 	t.Run("fails if operator name is invalid", func(t *testing.T) {
 		// given
 		fakeClient := test.NewFakeClient(t)
+		test.FakeSSA(fakeClient)
 		fakeClientWithReadyCatalogSource(fakeClient)
 		term := NewFakeTerminalWithResponse("Y")
 		ctx := clicontext.NewTerminalContext(term)
@@ -194,7 +201,7 @@ func TestInstallOperator(t *testing.T) {
 		// when
 		err := installOperator(ctx, installArgs{},
 			"INVALIDOPERATOR",
-			commonclient.NewApplyClient(fakeClient),
+			newApplyClient(fakeClient),
 		)
 
 		// then
@@ -204,6 +211,7 @@ func TestInstallOperator(t *testing.T) {
 	t.Run("doesn't install operator if response is no", func(t *testing.T) {
 		// given
 		fakeClient := test.NewFakeClient(t)
+		test.FakeSSA(fakeClient)
 		term := NewFakeTerminalWithResponse("n")
 		ctx := clicontext.NewTerminalContext(term)
 
@@ -211,7 +219,7 @@ func TestInstallOperator(t *testing.T) {
 		operator := "host"
 		err := installOperator(ctx, installArgs{namespace: "toolchain-host-operator", waitForReadyTimeout: time.Second * 1},
 			operator,
-			commonclient.NewApplyClient(fakeClient),
+			newApplyClient(fakeClient),
 		)
 
 		// then
@@ -222,7 +230,7 @@ func TestInstallOperator(t *testing.T) {
 }
 
 func fakeClientWithReadyCatalogSource(fakeClient *test.FakeClient) {
-	fakeClient.MockCreate = func(ctx context.Context, obj runtimeclient.Object, opts ...runtimeclient.CreateOption) error {
+	fakeClient.MockPatch = func(ctx context.Context, obj runtimeclient.Object, p runtimeclient.Patch, opts ...runtimeclient.PatchOption) error {
 		switch objT := obj.(type) {
 		case *olmv1alpha1.CatalogSource:
 			// let's set the status of the CS to be able to test the "happy path"
@@ -231,9 +239,13 @@ func fakeClientWithReadyCatalogSource(fakeClient *test.FakeClient) {
 					LastObservedState: "READY",
 				},
 			}
-			return fakeClient.Client.Create(ctx, objT)
+			return test.Patch(ctx, fakeClient, obj, p, opts...)
 		default:
-			return fakeClient.Client.Create(ctx, objT)
+			return test.Patch(ctx, fakeClient, obj, p, opts...)
 		}
 	}
+}
+
+func newApplyClient(cl *test.FakeClient) *commonclient.SSAApplyClient {
+	return commonclient.NewSSAApplyClient(cl, ksctlFieldManager)
 }

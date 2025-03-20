@@ -90,24 +90,34 @@ func NewClientFromRestConfig(cfg *rest.Config) (runtimeclient.Client, error) {
 }
 
 // NewKubeClientFromKubeConfig initializes a runtime client starting from a KubeConfig file path.
-func NewKubeClientFromKubeConfig(kubeConfigPath string) (cl runtimeclient.Client, err error) {
+func NewKubeClientFromKubeConfig(kubeConfigPath string) (runtimeclient.Client, error) {
+	clientConfig, err := NewRestConfigFromKubeConfig(kubeConfigPath)
+	if err != nil {
+		return nil, err
+	}
+
+	cl, err := NewClientFromRestConfig(clientConfig)
+	if err != nil {
+		return nil, err
+	}
+
+	return cl, nil
+}
+
+func NewRestConfigFromKubeConfig(kubeConfigPath string) (*rest.Config, error) {
 	var kubeConfig *clientcmdapi.Config
-	var clientConfig *rest.Config
+	var restConfig *rest.Config
 
-	kubeConfig, err = clientcmd.LoadFromFile(kubeConfigPath)
+	kubeConfig, err := clientcmd.LoadFromFile(kubeConfigPath)
 	if err != nil {
-		return
+		return nil, err
 	}
-	clientConfig, err = clientcmd.NewDefaultClientConfig(*kubeConfig, nil).ClientConfig()
+	restConfig, err = clientcmd.NewDefaultClientConfig(*kubeConfig, nil).ClientConfig()
 	if err != nil {
-		return
-	}
-	cl, err = NewClientFromRestConfig(clientConfig)
-	if err != nil {
-		return
+		return nil, err
 	}
 
-	return
+	return restConfig, nil
 }
 
 func newTlsVerifySkippingTransport() http.RoundTripper {
